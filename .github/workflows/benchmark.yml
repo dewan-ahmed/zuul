@@ -1,25 +1,20 @@
-name: benchmark
-
+name: Benchmark
 on:
-  workflow_dispatch:
-
+  pull_request: {}
+  workflow_dispatch: {}
+  
 permissions:
   contents: read
-
-env:
-  JDK: '17'
-  DISTRIBUTION: 'zulu'
-  GRADLE_COMMAND: './gradlew --no-daemon'
+  id-token: write
 
 jobs:
-  benchmark:
-    runs-on: ubuntu-latest
+  build-with-ut:
+    name: Build with UT
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - name: Set up JDK ${{ env.JDK }}
-        uses: actions/setup-java@v4
         with:
-          java-version: ${{ env.JDK }}
-          distribution: ${{ env.DISTRIBUTION }}
-      - name: JMH
-        run: ${{ env.GRADLE_COMMAND }} clean :zuul-core:jmh
+          fetch-depth: 10
+      - name: Test UTs
+        run: |
+          gradle --no-build-cache clean test --continue
