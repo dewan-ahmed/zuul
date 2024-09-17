@@ -7,6 +7,9 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  DOCKER_IMAGE: dewandemo/zuul
+  
 jobs:
   build-with-ut:
     name: Build with UT
@@ -18,3 +21,27 @@ jobs:
       - name: Test UTs
         run: |
           gradle --no-build-cache clean test --continue
+  
+  docker-build-and-push:
+    name: Docker Build and Push
+    runs-on: ubuntu-22.04
+    needs: build-with-ut
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build Docker image
+      - name: Build Docker Image
+        run: |
+          docker build -t $DOCKER_IMAGE .
+
+      # Log in to Docker Hub using credentials from environment variables
+      - name: Log in to Docker Hub
+        run: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+      # Push Docker image to Docker Hub
+      - name: Push Docker Image to Docker Hub
+        run: |
+          docker push $DOCKER_IMAGE        
