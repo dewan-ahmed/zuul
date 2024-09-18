@@ -38,7 +38,7 @@ class HttpServerLifecycleChannelHandlerTest {
 
     final class AssertReasonHandler extends ChannelInboundHandlerAdapter {
 
-        CompleteEvent completeEvent;
+        private CompleteEvent completeEvent;
 
         @Override
         public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
@@ -53,50 +53,47 @@ class HttpServerLifecycleChannelHandlerTest {
 
     @Test
     void completionEventReasonIsUpdatedOnPipelineReject() {
-
         final EmbeddedChannel channel = new EmbeddedChannel(new HttpServerLifecycleOutboundChannelHandler());
         final AssertReasonHandler reasonHandler = new AssertReasonHandler();
         channel.pipeline().addLast(reasonHandler);
 
         channel.attr(HttpLifecycleChannelHandler.ATTR_STATE).set(State.STARTED);
-        // emulate pipeline rejection
+        // Simulate pipeline rejection
         channel.attr(HttpLifecycleChannelHandler.ATTR_HTTP_PIPELINE_REJECT).set(Boolean.TRUE);
-        // Fire close
+        // Close pipeline
         channel.pipeline().close();
 
-        Truth.assertThat(reasonHandler.getCompleteEvent().getReason()).isEqualTo(CompleteReason.PIPELINE_REJECT);
+        Truth.assertThat(reasonHandler.getCompleteEvent().getReason())
+             .isEqualTo(CompleteReason.PIPELINE_REJECT);
     }
 
     @Test
     void completionEventReasonIsCloseByDefault() {
-
         final EmbeddedChannel channel = new EmbeddedChannel(new HttpServerLifecycleOutboundChannelHandler());
         final AssertReasonHandler reasonHandler = new AssertReasonHandler();
         channel.pipeline().addLast(reasonHandler);
 
         channel.attr(HttpLifecycleChannelHandler.ATTR_STATE).set(State.STARTED);
-        // Fire close
+        // Close pipeline
         channel.pipeline().close();
 
-        Truth.assertThat(reasonHandler.getCompleteEvent().getReason()).isEqualTo(CompleteReason.CLOSE);
+        Truth.assertThat(reasonHandler.getCompleteEvent().getReason())
+             .isEqualTo(CompleteReason.CLOSE);
     }
 
     @Test
     void pipelineRejectReleasesIfNeeded() {
+        final EmbeddedChannel channel = new EmbeddedChannel(new HttpServerLifecycleInboundChannelHandler());
+        final ByteBuf buffer = UnpooledByteBufAllocator.DEFAULT.buffer();
 
-        EmbeddedChannel channel = new EmbeddedChannel(new HttpServerLifecycleInboundChannelHandler());
-
-        ByteBuf buffer = UnpooledByteBufAllocator.DEFAULT.buffer();
         try {
             Truth.assertThat(buffer.refCnt()).isEqualTo(1);
-            FullHttpRequest httpRequest =
-                    new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/whatever", buffer);
+            final FullHttpRequest httpRequest = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/whatever", buffer);
             channel.attr(HttpLifecycleChannelHandler.ATTR_STATE).set(State.STARTED);
             channel.writeInbound(httpRequest);
 
-            Truth.assertThat(channel.attr(HttpLifecycleChannelHandler.ATTR_HTTP_PIPELINE_REJECT)
-                            .get())
-                    .isEqualTo(Boolean.TRUE);
+            Truth.assertThat(channel.attr(HttpLifecycleChannelHandler.ATTR_HTTP_PIPELINE_REJECT).get())
+                 .isEqualTo(Boolean.TRUE);
             Truth.assertThat(buffer.refCnt()).isEqualTo(0);
         } finally {
             if (buffer.refCnt() != 0) {
