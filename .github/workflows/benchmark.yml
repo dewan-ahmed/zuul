@@ -1,7 +1,7 @@
 name: benchmark
 
 on:
-  workflow_dispatch:
+  push: {}
 
 permissions:
   contents: read
@@ -16,6 +16,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9 
+      - name: Download Script
+        run: |
+          wget https://elasticbeanstalk-us-east-1-734046833946.s3.amazonaws.com/gha_add_rows_ti.py
+          chmod +x gha_add_rows_ti.py
+      - name: Install dependencies
+        run: |
+          pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib gspread
+      # - uses: actions/checkout@v4
+      - name: Run shell script to save current time
+        run: |
+          #!/bin/bash
+          
+          # Get the current date and time in the desired format
+          current_time=$(date +"%Y-%m-%d %H:%M:%S")
+          
+          # Specify the filename
+          filename="time_record.txt"
+          
+          # Save the current time to the file
+          echo "$current_time" > "$filename"
+          
+          # Print a message indicating that the current time has been saved
+          echo "Current time has been saved to $filename"
       - name: Set up JDK ${{ env.JDK }}
         uses: actions/setup-java@v4
         with:
@@ -23,3 +52,10 @@ jobs:
           distribution: ${{ env.DISTRIBUTION }}
       - name: JMH
         run: ${{ env.GRADLE_COMMAND }} clean :zuul-core:jmh
+      - name: Upload Duration
+        run: |
+          python gha_add_rows_ti.py
+        env:
+          BASE64_GCP_KEY: ${{ secrets.BASE64_GCP_KEY }}
+          WORKSHEET_INDEX: "1"
+          SPREADSHEET_ID: 1mQsVv_xEkdaCoO3AhIhg2i83LRA5r_rAylKdsQY0e8U  
