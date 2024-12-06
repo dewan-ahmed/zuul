@@ -45,13 +45,10 @@ jobs:
           
           # Print a message indicating that the current time has been saved
           echo "Current time has been saved to $filename"
-      - name: Set up JDK ${{ env.JDK }}
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JDK }}
-          distribution: ${{ env.DISTRIBUTION }}
-      - name: JMH
-        run: ${{ env.GRADLE_COMMAND }} clean :zuul-core:jmh
+      - name: Test UTs
+        continue-on-error: true
+        run: |
+          gradle clean test --continue
       - name: Upload Duration
         run: |
           python gha_add_rows_ti.py
