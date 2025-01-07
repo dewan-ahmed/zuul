@@ -67,7 +67,7 @@ subprojects {
     tasks.withType(JavaCompile).configureEach {
         dependencies {
             errorprone "com.uber.nullaway:nullaway:0.12.1"
-            errorprone "com.google.errorprone:error_prone_core:2.35.1"
+            errorprone "com.google.errorprone:error_prone_core:2.36.0"
         }
 
         options.errorprone {
@@ -242,7 +242,7 @@ subprojects {
                 mockito: 'org.mockito:mockito-core:5.+',
                 slf4j: "org.slf4j:slf4j-api:2.0.16",
                 truth: 'com.google.truth:truth:1.4.4',
-                awaitility: 'org.awaitility:awaitility:4.2.0'
+                awaitility: 'org.awaitility:awaitility:4.2.2'
         ]
     }
 
