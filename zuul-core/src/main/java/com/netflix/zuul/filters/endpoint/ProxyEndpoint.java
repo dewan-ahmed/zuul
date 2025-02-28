@@ -23,7 +23,6 @@ import com.google.errorprone.annotations.ForOverride;
 import com.netflix.client.ClientException;
 import com.netflix.client.config.IClientConfigKey;
 import com.netflix.config.CachedDynamicLongProperty;
-import com.netflix.config.DynamicBooleanProperty;
 import com.netflix.config.DynamicIntegerSetProperty;
 import com.netflix.netty.common.ByteBufUtil;
 import com.netflix.spectator.api.Counter;
@@ -90,6 +89,11 @@ import io.netty.util.concurrent.GenericFutureListener;
 import io.netty.util.concurrent.Promise;
 import io.perfmark.PerfMark;
 import io.perfmark.TaskCloseable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.io.UnsupportedEncodingException;
 import java.net.InetAddress;
 import java.net.URLDecoder;
@@ -101,9 +105,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.annotation.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Not thread safe! New instance of this class is created per HTTP/1.1 request proxied to the origin but NOT for each
@@ -152,8 +153,6 @@ public class ProxyEndpoint extends SyncZuulFilterAdapter<HttpRequestMessage, Htt
     public static final Set<String> IDEMPOTENT_HTTP_METHODS = Sets.newHashSet("GET", "HEAD", "OPTIONS");
     private static final DynamicIntegerSetProperty RETRIABLE_STATUSES_FOR_IDEMPOTENT_METHODS =
             new DynamicIntegerSetProperty("zuul.retry.allowed.statuses.idempotent", "500");
-    private static final DynamicBooleanProperty ENABLE_ORIGIN_THROTTLED_FOR_LB_ERRORS =
-            new DynamicBooleanProperty("zuul.lb.503error.enabled", false);
 
     /**
      * Indicates how long Zuul should remember throttle events for an origin.  As of this writing, throttling is used
@@ -845,16 +844,7 @@ public class ProxyEndpoint extends SyncZuulFilterAdapter<HttpRequestMessage, Htt
         // Invoke any Ribbon execution listeners.
         // Request was a success even if server may have responded with an error code 5XX.
         if (originConn != null) {
-            if (!ENABLE_ORIGIN_THROTTLED_FOR_LB_ERRORS.get()
-                    && statusCategory == ZuulStatusCategory.FAILURE_ORIGIN_THROTTLED) {
-                origin.onRequestExecutionFailed(
-                        zuulRequest,
-                        originConn.getServer(),
-                        attemptNum,
-                        new ClientException(ClientException.ErrorType.SERVER_THROTTLED));
-            } else {
-                origin.onRequestExecutionSuccess(zuulRequest, zuulResponse, originConn.getServer(), attemptNum);
-            }
+            origin.onRequestExecutionSuccess(zuulRequest, zuulResponse, originConn.getServer(), attemptNum);
         }
 
         // Collect some info about the received response.
@@ -1073,21 +1063,19 @@ public class ProxyEndpoint extends SyncZuulFilterAdapter<HttpRequestMessage, Htt
             return null;
         }
 
-        String restClientName = getClientName(context);
-
         NettyOrigin origin = null;
         // allow implementors to override the origin with custom injection logic
         OriginName overrideOriginName = injectCustomOriginName(request);
         if (overrideOriginName != null) {
             // Use the custom vip instead if one has been provided.
             origin = getOrCreateOrigin(originManager, overrideOriginName, request.reconstructURI(), context);
-        } else if (restClientName != null) {
+        } else {
             // This is the normal flow - that a RoutingFilter has assigned a route
-            OriginName originName = OriginName.fromVip(primaryRoute, restClientName);
+            OriginName originName = getOriginName(context);
             origin = getOrCreateOrigin(originManager, originName, request.reconstructURI(), context);
         }
 
-        verifyOrigin(context, request, restClientName, origin);
+        verifyOrigin(context, request, origin);
 
         // Update the routeVip on context to show the actual raw VIP from the clientConfig of the chosen Origin.
         if (origin != null) {
@@ -1102,6 +1090,13 @@ public class ProxyEndpoint extends SyncZuulFilterAdapter<HttpRequestMessage, Htt
         return origin;
     }
 
+    @Nonnull
+    protected OriginName getOriginName(SessionContext context) {
+        String clientName = getClientName(context);
+        return OriginName.fromVip(context.getRouteVIP(), clientName);
+    }
+
+    @Nonnull
     protected String getClientName(SessionContext context) {
         // make sure the restClientName will never be a raw VIP in cases where it's the fallback for another route
         // assignment
@@ -1139,19 +1134,18 @@ public class ProxyEndpoint extends SyncZuulFilterAdapter<HttpRequestMessage, Htt
         return origin;
     }
 
-    private void verifyOrigin(
-            SessionContext context, HttpRequestMessage request, String restClientName, Origin primaryOrigin) {
+    private void verifyOrigin(SessionContext context, HttpRequestMessage request, Origin primaryOrigin) {
         if (primaryOrigin == null) {
+            String vip = context.getRouteVIP();
             // If no origin found then add specific error-cause metric tag, and throw an exception with 404 status.
             StatusCategoryUtils.setStatusCategory(
                     context,
                     ZuulStatusCategory.SUCCESS_LOCAL_NO_ROUTE,
-                    "Unable to find an origin client matching `" + restClientName + "` to handle request");
+                    "Unable to find an origin client matching `" + vip + "` to handle request");
             String causeName = "RESTCLIENT_NOTFOUND";
             originNotFound(context, causeName);
             ZuulException ze = new ZuulException(
-                    "No origin found for request. name=" + restClientName + ", uri=" + request.reconstructURI(),
-                    causeName);
+                    "No origin found for request. name=" + vip + ", uri=" + request.reconstructURI(), causeName);
             ze.setStatusCode(404);
             throw ze;
         }
