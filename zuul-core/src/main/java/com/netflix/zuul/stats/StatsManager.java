@@ -100,7 +100,7 @@ public class StatsManager {
     @VisibleForTesting
     static final String hostKey(String host) {
         try {
-            final Matcher m = HOST_PATTERN.matcher(host);
+            Matcher m = HOST_PATTERN.matcher(host);
 
             // I know which type of host matched by the number of the group that is non-null
             // I use a different replacement string per host type to make the Epic stats more clear
@@ -121,9 +121,8 @@ public class StatsManager {
             }
         } catch (Exception e) {
             LOG.error(e.getMessage(), e);
-        } finally {
-            return String.format("host_%s", host);
         }
+        return String.format("host_%s", host);
     }
 
     private static final String protocolKey(String proto) {
@@ -139,16 +138,16 @@ public class StatsManager {
     public void collectRequestStats(HttpRequestInfo req) {
         // ipv4/ipv6 tracking
         String clientIp;
-        final String xForwardedFor = req.getHeaders().getFirst(X_FORWARDED_FOR_HEADER);
+        String xForwardedFor = req.getHeaders().getFirst(X_FORWARDED_FOR_HEADER);
         if (xForwardedFor == null) {
             clientIp = req.getClientIp();
         } else {
             clientIp = extractClientIpFromXForwardedFor(xForwardedFor);
         }
 
-        final boolean isIPv6 = (clientIp != null) ? isIPv6(clientIp) : false;
+        boolean isIPv6 = (clientIp != null) ? isIPv6(clientIp) : false;
 
-        final String ipVersionKey = isIPv6 ? "ipv6" : "ipv4";
+        String ipVersionKey = isIPv6 ? "ipv6" : "ipv4";
         incrementNamedCountingMonitor(ipVersionKey, ipVersionCounterMap);
 
         // host header
@@ -178,12 +177,12 @@ public class StatsManager {
 
     @VisibleForTesting
     static final boolean isIPv6(String ip) {
-        return ip.split(":").length == 8;
+        return ip.split(":", -1).length == 8;
     }
 
     @VisibleForTesting
     static final String extractClientIpFromXForwardedFor(String xForwardedFor) {
-        return xForwardedFor.split(",")[0];
+        return xForwardedFor.split(",", -1)[0];
     }
 
     /**
@@ -212,7 +211,7 @@ public class StatsManager {
     public void collectRouteStats(String route, int statusCode) {
 
         // increments 200, 301, 401, 503, etc. status counters
-        final String preciseStatusString = String.format("status_%d", statusCode);
+        String preciseStatusString = String.format("status_%d", statusCode);
         NamedCountingMonitor preciseStatus = namedStatusMap.get(preciseStatusString);
         if (preciseStatus == null) {
             preciseStatus = new NamedCountingMonitor(preciseStatusString);
@@ -226,7 +225,7 @@ public class StatsManager {
         preciseStatus.increment();
 
         // increments 2xx, 3xx, 4xx, 5xx status counters
-        final String summaryStatusString = String.format("status_%dxx", statusCode / 100);
+        String summaryStatusString = String.format("status_%dxx", statusCode / 100);
         NamedCountingMonitor summaryStatus = namedStatusMap.get(summaryStatusString);
         if (summaryStatus == null) {
             summaryStatus = new NamedCountingMonitor(summaryStatusString);

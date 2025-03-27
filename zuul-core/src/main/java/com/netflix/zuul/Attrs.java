@@ -20,7 +20,6 @@ import com.google.common.annotations.VisibleForTesting;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -36,7 +35,7 @@ import javax.annotation.Nullable;
  */
 public final class Attrs {
 
-    final Map<Key<?>, Object> storage = new IdentityHashMap<>();
+    final IdentityHashMap<Key<?>, Object> storage = new IdentityHashMap<>();
 
     public static <T> Key<T> newKey(String keyName) {
         return new Key<>(keyName);
@@ -49,8 +48,7 @@ public final class Attrs {
         /**
          * Returns the value in the attributes, or {@code null} if absent.
          */
-        @Nullable
-        @SuppressWarnings("unchecked")
+        @Nullable @SuppressWarnings("unchecked")
         public T get(Attrs attrs) {
             Objects.requireNonNull(attrs, "attrs");
             return (T) attrs.storage.get(this);

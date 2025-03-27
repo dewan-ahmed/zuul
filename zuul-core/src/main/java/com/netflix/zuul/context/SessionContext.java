@@ -112,6 +112,7 @@ public final class SessionContext extends HashMap<String, Object> implements Clo
         }
     }
 
+    @SuppressWarnings("UnnecessaryStringBuilder")
     public SessionContext() {
         // Use a higher than default initial capacity for the hashmap as we generally have more than the default
         // 16 entries.
@@ -144,9 +145,8 @@ public final class SessionContext extends HashMap<String, Object> implements Clo
      * Returns the value in the context, or {@code null} if absent.
      */
     @SuppressWarnings("unchecked")
-    @Nullable
-    public <T> T get(@NonNull Key<T> key) {
-        T value = (T)typedMap.get(key);
+    @Nullable public <T> T get(@NonNull Key<T> key) {
+        T value = (T) typedMap.get(key);
         if (value == null) {
             value = key.defaultValue();
         }
@@ -208,8 +208,7 @@ public final class SessionContext extends HashMap<String, Object> implements Clo
      * Returns the previous value associated with key, or {@code null} if there was no mapping for key.  Unlike
      * {@link #put(String, Object)}, this will never return a null value if the key is present in the map.
      */
-    @Nullable
-    @CanIgnoreReturnValue
+    @Nullable @CanIgnoreReturnValue
     public <T> T put(Key<T> key, T value) {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(value, "value");

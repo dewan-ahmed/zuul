@@ -54,8 +54,6 @@ import java.net.SocketAddress;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import javax.inject.Inject;
-import javax.inject.Singleton;
 
 /**
  * Sample Server Startup - class that configures the Netty server startup settings
@@ -63,7 +61,6 @@ import javax.inject.Singleton;
  * Author: Arthur Gonigberg
  * Date: November 20, 2017
  */
-@Singleton
 public class SampleServerStartup extends BaseServerStartup {
 
     enum ServerType {
@@ -79,7 +76,6 @@ public class SampleServerStartup extends BaseServerStartup {
     private final PushConnectionRegistry pushConnectionRegistry;
     private final SamplePushMessageSenderInitializer pushSenderInitializer;
 
-    @Inject
     public SampleServerStartup(
             ServerStatusManager serverStatusManager,
             FilterLoader filterLoader,
@@ -117,7 +113,7 @@ public class SampleServerStartup extends BaseServerStartup {
         SocketAddress sockAddr;
         String metricId;
         {
-            @Deprecated int port = new DynamicIntProperty("zuul.server.port.main", 7001).get();
+            int port = new DynamicIntProperty("zuul.server.port.main", 7001).get();
             sockAddr = new SocketAddressProperty("zuul.server.addr.main", "=" + port).getValue();
             if (sockAddr instanceof InetSocketAddress) {
                 metricId = String.valueOf(((InetSocketAddress) sockAddr).getPort());
@@ -142,9 +138,9 @@ public class SampleServerStartup extends BaseServerStartup {
          * or directly on the internet.
          */
         switch (SERVER_TYPE) {
-            /* The below settings can be used when running behind an ELB HTTP listener that terminates SSL for you
-             * and passes XFF headers.
-             */
+                /* The below settings can be used when running behind an ELB HTTP listener that terminates SSL for you
+                 * and passes XFF headers.
+                 */
             case HTTP:
                 channelConfig.set(
                         CommonChannelConfigKeys.allowProxyHeadersWhen,
@@ -159,9 +155,9 @@ public class SampleServerStartup extends BaseServerStartup {
                 logAddrConfigured(sockAddr);
                 break;
 
-            /* The below settings can be used when running behind an ELB TCP listener with proxy protocol, terminating
-             * SSL in Zuul.
-             */
+                /* The below settings can be used when running behind an ELB TCP listener with proxy protocol, terminating
+                 * SSL in Zuul.
+                 */
             case HTTP2:
                 sslConfig = ServerSslConfig.withDefaultCiphers(
                         loadFromResources("server.cert"), loadFromResources("server.key"), WWW_PROTOCOLS);
@@ -183,12 +179,12 @@ public class SampleServerStartup extends BaseServerStartup {
                 logAddrConfigured(sockAddr, sslConfig);
                 break;
 
-            /* The below settings can be used when running behind an ELB TCP listener with proxy protocol, terminating
-             * SSL in Zuul.
-             *
-             * Can be tested using certs in resources directory:
-             *  curl https://localhost:7001/test -vk --cert src/main/resources/ssl/client.cert:zuul123 --key src/main/resources/ssl/client.key
-             */
+                /* The below settings can be used when running behind an ELB TCP listener with proxy protocol, terminating
+                 * SSL in Zuul.
+                 *
+                 * Can be tested using certs in resources directory:
+                 *  curl https://localhost:7001/test -vk --cert src/main/resources/ssl/client.cert:zuul123 --key src/main/resources/ssl/client.key
+                 */
             case HTTP_MUTUAL_TLS:
                 sslConfig = new ServerSslConfig(
                         WWW_PROTOCOLS,
@@ -217,8 +213,8 @@ public class SampleServerStartup extends BaseServerStartup {
                 logAddrConfigured(sockAddr, sslConfig);
                 break;
 
-            /* Settings to be used when running behind an ELB TCP listener with proxy protocol as a Push notification
-             * server using WebSockets */
+                /* Settings to be used when running behind an ELB TCP listener with proxy protocol as a Push notification
+                 * server using WebSockets */
             case WEBSOCKET:
                 channelConfig.set(
                         CommonChannelConfigKeys.allowProxyHeadersWhen,
@@ -240,8 +236,8 @@ public class SampleServerStartup extends BaseServerStartup {
                 logAddrConfigured(pushSockAddr);
                 break;
 
-            /* Settings to be used when running behind an ELB TCP listener with proxy protocol as a Push notification
-             * server using Server Sent Events (SSE) */
+                /* Settings to be used when running behind an ELB TCP listener with proxy protocol as a Push notification
+                 * server using Server Sent Events (SSE) */
             case SSE:
                 channelConfig.set(
                         CommonChannelConfigKeys.allowProxyHeadersWhen,

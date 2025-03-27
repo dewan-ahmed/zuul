@@ -18,7 +18,6 @@ package com.netflix.zuul.sample;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.inject.Singleton;
 import rx.Observable;
 
 /**
@@ -27,7 +26,6 @@ import rx.Observable;
  * Author: Arthur Gonigberg
  * Date: January 04, 2018
  */
-@Singleton
 public class SampleService {
 
     private final AtomicBoolean status;

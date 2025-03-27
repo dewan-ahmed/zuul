@@ -17,7 +17,6 @@
 package com.netflix.zuul.netty.server;
 
 import com.google.common.base.Preconditions;
-import com.netflix.config.CachedDynamicBooleanProperty;
 import com.netflix.config.CachedDynamicIntProperty;
 import com.netflix.netty.common.CloseOnIdleStateHandler;
 import com.netflix.netty.common.Http1ConnectionCloseHandler;
@@ -57,7 +56,6 @@ import com.netflix.zuul.netty.insights.PassportLoggingHandler;
 import com.netflix.zuul.netty.insights.PassportStateHttpServerHandler;
 import com.netflix.zuul.netty.insights.ServerStateHandler;
 import com.netflix.zuul.netty.server.ssl.SslHandshakeInfoHandler;
-import com.netflix.zuul.netty.timeouts.HttpHeadersTimeoutHandler;
 import com.netflix.zuul.passport.PassportState;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
@@ -90,12 +88,6 @@ public abstract class BaseZuulChannelInitializer extends ChannelInitializer<Chan
     public static final CachedDynamicIntProperty MAX_CHUNK_SIZE =
             new CachedDynamicIntProperty("server.http.decoder.maxChunkSize", 32768);
 
-    public static final CachedDynamicBooleanProperty HTTP_REQUEST_HEADERS_READ_TIMEOUT_ENABLED =
-            new CachedDynamicBooleanProperty("server.http.request.headers.read.timeout.enabled", false);
-
-    public static final CachedDynamicIntProperty HTTP_REQUEST_HEADERS_READ_TIMEOUT =
-            new CachedDynamicIntProperty("server.http.request.headers.read.timeout", 10000);
-
     /**
      * The port that the server intends to listen on.  Subclasses should NOT use this field, as it may not be set, and
      * may differ from the actual listening port.  For example:
@@ -119,7 +111,6 @@ public abstract class BaseZuulChannelInitializer extends ChannelInitializer<Chan
     protected final int maxRequestsPerConnectionInBrownout;
     protected final int connectionExpiry;
     protected final int maxConnections;
-    private final int connCloseDelay;
 
     protected final Registry registry;
     protected final HttpMetricsChannelHandler httpMetricsHandler;
@@ -137,7 +128,6 @@ public abstract class BaseZuulChannelInitializer extends ChannelInitializer<Chan
     // protected final RequestRejectedChannelHandler requestRejectedChannelHandler;
     protected final SessionContextDecorator sessionContextDecorator;
     protected final RequestCompleteHandler requestCompleteHandler;
-    protected final Counter httpRequestHeadersReadTimeoutCounter;
     protected final Counter httpRequestReadTimeoutCounter;
     protected final FilterLoader filterLoader;
     protected final FilterUsageNotifier filterUsageNotifier;
@@ -197,7 +187,6 @@ public abstract class BaseZuulChannelInitializer extends ChannelInitializer<Chan
         this.maxRequestsPerConnectionInBrownout =
                 channelConfig.get(CommonChannelConfigKeys.maxRequestsPerConnectionInBrownout);
         this.connectionExpiry = channelConfig.get(CommonChannelConfigKeys.connectionExpiry);
-        this.connCloseDelay = channelConfig.get(CommonChannelConfigKeys.connCloseDelay);
 
         StripUntrustedProxyHeadersHandler.AllowWhen allowProxyHeadersWhen =
                 channelConfig.get(CommonChannelConfigKeys.allowProxyHeadersWhen);
@@ -215,7 +204,6 @@ public abstract class BaseZuulChannelInitializer extends ChannelInitializer<Chan
 
         this.sessionContextDecorator = channelDependencies.get(ZuulDependencyKeys.sessionCtxDecorator);
         this.requestCompleteHandler = channelDependencies.get(ZuulDependencyKeys.requestCompleteHandler);
-        this.httpRequestHeadersReadTimeoutCounter = channelDependencies.get(ZuulDependencyKeys.httpRequestHeadersReadTimeoutCounter);
         this.httpRequestReadTimeoutCounter = channelDependencies.get(ZuulDependencyKeys.httpRequestReadTimeoutCounter);
 
         this.filterLoader = channelDependencies.get(ZuulDependencyKeys.filterLoader);
@@ -261,11 +249,6 @@ public abstract class BaseZuulChannelInitializer extends ChannelInitializer<Chan
     }
 
     protected void addHttpRelatedHandlers(ChannelPipeline pipeline) {
-        pipeline.addLast(new HttpHeadersTimeoutHandler.InboundHandler(
-            HTTP_REQUEST_HEADERS_READ_TIMEOUT_ENABLED::get,
-            HTTP_REQUEST_HEADERS_READ_TIMEOUT::get,
-            httpRequestHeadersReadTimeoutCounter
-        ));
         pipeline.addLast(new PassportStateHttpServerHandler.InboundHandler());
         pipeline.addLast(new PassportStateHttpServerHandler.OutboundHandler());
         if (httpRequestReadTimeout > -1) {
@@ -312,7 +295,7 @@ public abstract class BaseZuulChannelInitializer extends ChannelInitializer<Chan
         }
     }
 
-    protected void addZuulHandlers(final ChannelPipeline pipeline) {
+    protected void addZuulHandlers(ChannelPipeline pipeline) {
         pipeline.addLast("logger", nettyLogger);
         pipeline.addLast(new ClientRequestReceiver(sessionContextDecorator));
         pipeline.addLast(passportLoggingHandler);
@@ -320,25 +303,25 @@ public abstract class BaseZuulChannelInitializer extends ChannelInitializer<Chan
         pipeline.addLast(new ClientResponseWriter(requestCompleteHandler, registry));
     }
 
-    protected void addZuulFilterChainHandler(final ChannelPipeline pipeline) {
-        final ZuulFilter<HttpResponseMessage, HttpResponseMessage>[] responseFilters = getFilters(
+    protected void addZuulFilterChainHandler(ChannelPipeline pipeline) {
+        ZuulFilter<HttpResponseMessage, HttpResponseMessage>[] responseFilters = getFilters(
                 new OutboundPassportStampingFilter(PassportState.FILTERS_OUTBOUND_START),
                 new OutboundPassportStampingFilter(PassportState.FILTERS_OUTBOUND_END));
 
         // response filter chain
-        final ZuulFilterChainRunner<HttpResponseMessage> responseFilterChain =
+        ZuulFilterChainRunner<HttpResponseMessage> responseFilterChain =
                 getFilterChainRunner(responseFilters, filterUsageNotifier);
 
         // endpoint | response filter chain
-        final FilterRunner<HttpRequestMessage, HttpResponseMessage> endPoint =
+        FilterRunner<HttpRequestMessage, HttpResponseMessage> endPoint =
                 getEndpointRunner(responseFilterChain, filterUsageNotifier, filterLoader);
 
-        final ZuulFilter<HttpRequestMessage, HttpRequestMessage>[] requestFilters = getFilters(
+        ZuulFilter<HttpRequestMessage, HttpRequestMessage>[] requestFilters = getFilters(
                 new InboundPassportStampingFilter(PassportState.FILTERS_INBOUND_START),
                 new InboundPassportStampingFilter(PassportState.FILTERS_INBOUND_END));
 
         // request filter chain | end point | response filter chain
-        final ZuulFilterChainRunner<HttpRequestMessage> requestFilterChain =
+        ZuulFilterChainRunner<HttpRequestMessage> requestFilterChain =
                 getFilterChainRunner(requestFilters, filterUsageNotifier, endPoint);
 
         pipeline.addLast(new ZuulFilterChainHandler(requestFilterChain, responseFilterChain));
@@ -363,8 +346,8 @@ public abstract class BaseZuulChannelInitializer extends ChannelInitializer<Chan
 
     @SuppressWarnings("unchecked") // For the conversion from getFiltersByType.  It's not safe, sorry.
     public <T extends ZuulMessage> ZuulFilter<T, T>[] getFilters(ZuulFilter<T, T> start, ZuulFilter<T, T> stop) {
-        final SortedSet<ZuulFilter<?, ?>> zuulFilters = filterLoader.getFiltersByType(start.filterType());
-        final ZuulFilter<T, T>[] filters = new ZuulFilter[zuulFilters.size() + 2];
+        SortedSet<ZuulFilter<?, ?>> zuulFilters = filterLoader.getFiltersByType(start.filterType());
+        ZuulFilter<T, T>[] filters = new ZuulFilter[zuulFilters.size() + 2];
         filters[0] = start;
         int i = 1;
         for (ZuulFilter<?, ?> filter : zuulFilters) {

@@ -19,8 +19,8 @@ package com.netflix.zuul;
 import com.google.errorprone.annotations.DoNotCall;
 import com.netflix.zuul.filters.FilterType;
 import com.netflix.zuul.filters.ZuulFilter;
+import jakarta.inject.Inject;
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -37,7 +37,6 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import javax.annotation.Nullable;
-import javax.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -123,12 +122,6 @@ public final class StaticFilterLoader implements FilterLoader {
 
     @Override
     @DoNotCall
-    public boolean putFilter(File file) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    @DoNotCall
     public List<ZuulFilter<?, ?>> putFiltersForClasses(String[] classNames) {
         throw new UnsupportedOperationException();
     }
@@ -145,8 +138,7 @@ public final class StaticFilterLoader implements FilterLoader {
     }
 
     @Override
-    @Nullable
-    public ZuulFilter<?, ?> getFilterByNameAndType(String name, FilterType type) {
+    @Nullable public ZuulFilter<?, ?> getFilterByNameAndType(String name, FilterType type) {
         Map<String, ZuulFilter<?, ?>> filtersByName = filtersByTypeAndName.get(type);
         if (filtersByName == null) {
             return null;

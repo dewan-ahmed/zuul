@@ -40,10 +40,6 @@ import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoop;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.concurrent.Promise;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nullable;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -53,6 +49,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.annotation.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * User: michaels@netflix.com
@@ -62,8 +61,6 @@ import java.util.concurrent.atomic.AtomicReference;
 public class DefaultClientChannelManager implements ClientChannelManager {
     public static final String IDLE_STATE_HANDLER_NAME = "idleStateHandler";
     private static final Logger LOG = LoggerFactory.getLogger(DefaultClientChannelManager.class);
-    private static final Throwable SHUTTING_DOWN_ERR =
-            new IllegalStateException("ConnectionPool is shutting down now.");
     private final Resolver<DiscoveryResult> dynamicServerResolver;
     private final ConnectionPoolConfig connPoolConfig;
     private final IClientConfig clientConfig;
@@ -158,13 +155,13 @@ public class DefaultClientChannelManager implements ClientChannelManager {
     }
 
     @Override
-    public boolean release(final PooledConnection conn) {
+    public boolean release(PooledConnection conn) {
 
         conn.stopRequestTimer();
         metrics.releaseConnCounter().increment();
         metrics.connsInUse().decrementAndGet();
 
-        final DiscoveryResult discoveryResult = conn.getServer();
+        DiscoveryResult discoveryResult = conn.getServer();
         updateServerStatsOnRelease(conn);
 
         boolean released = false;
@@ -226,14 +223,14 @@ public class DefaultClientChannelManager implements ClientChannelManager {
         return usageCount > connPoolConfig.getMaxRequestsPerConnection();
     }
 
-    protected void updateServerStatsOnRelease(final PooledConnection conn) {
-        final DiscoveryResult discoveryResult = conn.getServer();
+    protected void updateServerStatsOnRelease(PooledConnection conn) {
+        DiscoveryResult discoveryResult = conn.getServer();
         discoveryResult.decrementActiveRequestsCount();
         discoveryResult.incrementNumRequests();
     }
 
     protected void releaseHandlers(PooledConnection conn) {
-        final ChannelPipeline pipeline = conn.getChannel().pipeline();
+        ChannelPipeline pipeline = conn.getChannel().pipeline();
         removeHandlerFromPipeline(OriginResponseReceiver.CHANNEL_HANDLER_NAME, pipeline);
         // The Outbound handler is always after the inbound handler, so look for it.
         ChannelHandlerContext passportStateHttpClientHandlerCtx =
@@ -244,7 +241,7 @@ public class DefaultClientChannelManager implements ClientChannelManager {
                 new IdleStateHandler(0, 0, connPoolConfig.getIdleTimeout(), TimeUnit.MILLISECONDS));
     }
 
-    public static void removeHandlerFromPipeline(final String handlerName, final ChannelPipeline pipeline) {
+    public static void removeHandlerFromPipeline(String handlerName, ChannelPipeline pipeline) {
         if (pipeline.get(handlerName) != null) {
             pipeline.remove(handlerName);
         }
@@ -273,7 +270,7 @@ public class DefaultClientChannelManager implements ClientChannelManager {
     }
 
     @Override
-    public Promise<PooledConnection> acquire(final EventLoop eventLoop) {
+    public Promise<PooledConnection> acquire(EventLoop eventLoop) {
         return acquire(eventLoop, null, CurrentPassport.create(), new AtomicReference<>(), new AtomicReference<>());
     }
 
@@ -287,16 +284,16 @@ public class DefaultClientChannelManager implements ClientChannelManager {
 
         if (shuttingDown) {
             Promise<PooledConnection> promise = eventLoop.newPromise();
-            promise.setFailure(SHUTTING_DOWN_ERR);
+            promise.setFailure(new IllegalStateException("ConnectionPool is shutting down now."));
             return promise;
         }
 
         // Choose the next load-balanced server.
-        final DiscoveryResult chosenServer = dynamicServerResolver.resolve(key);
+        DiscoveryResult chosenServer = dynamicServerResolver.resolve(key);
 
         // (argha-c): Always ensure the selected server is updated, since the call chain relies on this mutation.
         selectedServer.set(chosenServer);
-        if (chosenServer == DiscoveryResult.EMPTY) {
+        if (Objects.equals(chosenServer, DiscoveryResult.EMPTY)) {
             Promise<PooledConnection> promise = eventLoop.newPromise();
             promise.setFailure(
                     new OriginConnectException("No servers available", OutboundErrorType.NO_AVAILABLE_SERVERS));
@@ -306,7 +303,7 @@ public class DefaultClientChannelManager implements ClientChannelManager {
         // Now get the connection-pool for this server.
         IConnectionPool pool = perServerPools.computeIfAbsent(chosenServer, s -> {
             SocketAddress finalServerAddr = pickAddress(chosenServer);
-            final ClientChannelManager clientChannelMgr = this;
+            ClientChannelManager clientChannelMgr = this;
             PooledConnectionFactory pcf = createPooledConnectionFactory(
                     chosenServer, clientChannelMgr, metrics.closeConnCounter(), metrics.closeWrtBusyConnCounter());
 

@@ -28,7 +28,6 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.haproxy.HAProxyMessage;
 import io.netty.handler.codec.haproxy.HAProxyProtocolVersion;
 import io.netty.handler.codec.haproxy.HAProxyTLV;
-import io.netty.handler.codec.haproxy.HAProxyTLV.Type;
 import io.netty.util.AttributeKey;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -47,8 +46,8 @@ public final class HAProxyMessageChannelHandler extends ChannelInboundHandlerAda
             AttributeKey.newInstance("_haproxy_message");
     public static final AttributeKey<HAProxyProtocolVersion> ATTR_HAPROXY_VERSION =
             AttributeKey.newInstance("_haproxy_version");
-    public static final AttributeKey<List<HAProxyTLV>> ATTR_HAPROXY_CUSTOM_TLVS = AttributeKey.newInstance(
-            "_haproxy_tlvs");
+    public static final AttributeKey<List<HAProxyTLV>> ATTR_HAPROXY_CUSTOM_TLVS =
+            AttributeKey.newInstance("_haproxy_tlvs");
 
     @VisibleForTesting
     static final Attrs.Key<Integer> HAPM_DEST_PORT = Attrs.newKey("hapm_port");
@@ -60,15 +59,15 @@ public final class HAProxyMessageChannelHandler extends ChannelInboundHandlerAda
     static final Attrs.Key<String> HAPM_SRC_IP_VERSION = Attrs.newKey("hapm_src_ipproto");
 
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        if (msg instanceof HAProxyMessage) {
-            HAProxyMessage hapm = (HAProxyMessage) msg;
+    public void channelRead(ChannelHandlerContext ctx, Object msg) {
+        if (msg instanceof HAProxyMessage hapm) {
             Channel channel = ctx.channel();
             channel.attr(ATTR_HAPROXY_MESSAGE).set(hapm);
             ctx.channel().closeFuture().addListener((ChannelFutureListener) future -> hapm.release());
             channel.attr(ATTR_HAPROXY_VERSION).set(hapm.protocolVersion());
             // Parse and persist any custom TLVs that might be part of the connection
-            final List<HAProxyTLV> tlvList = hapm.tlvs().stream().filter(tlv -> tlv.type() == Type.OTHER)
+            List<HAProxyTLV> tlvList = hapm.tlvs().stream()
+                    .filter(tlv -> tlv.type() == HAProxyTLV.Type.OTHER)
                     .collect(Collectors.toList());
             channel.attr(ATTR_HAPROXY_CUSTOM_TLVS).set(tlvList);
             // Get the real host and port that the client connected with.
@@ -85,32 +84,30 @@ public final class HAProxyMessageChannelHandler extends ChannelInboundHandlerAda
             channel.attr(SourceAddressChannelHandler.ATTR_SOURCE_ADDRESS).set(sourceAddress);
 
             SocketAddress srcAddr;
-            out:
-            {
-                switch (hapm.proxiedProtocol()) {
-                    case UNKNOWN:
-                        throw new IllegalArgumentException("unknown proxy protocol" + sourceAddress);
-                    case TCP4:
-                    case TCP6:
-                        InetSocketAddress inetAddr;
-                        srcAddr = inetAddr =
-                                new InetSocketAddress(InetAddresses.forString(sourceAddress), hapm.sourcePort());
-                        Attrs attrs = channel.attr(Server.CONN_DIMENSIONS).get();
-                        if (inetAddr.getAddress() instanceof Inet4Address) {
-                            HAPM_SRC_IP_VERSION.put(attrs, "v4");
-                        } else if (inetAddr.getAddress() instanceof Inet6Address) {
-                            HAPM_SRC_IP_VERSION.put(attrs, "v6");
-                        } else {
-                            HAPM_SRC_IP_VERSION.put(attrs, "unknown");
-                        }
-                        break out;
-                    case UNIX_STREAM: // TODO: implement
-                    case UDP4:
-                    case UDP6:
-                    case UNIX_DGRAM:
-                        throw new IllegalArgumentException("unknown proxy protocol" + sourceAddress);
-                }
-                throw new AssertionError(hapm.proxiedProtocol());
+            switch (hapm.proxiedProtocol()) {
+                case UNKNOWN:
+                    throw new IllegalArgumentException("unknown proxy protocol" + sourceAddress);
+                case TCP4:
+                case TCP6:
+                    InetSocketAddress inetAddr;
+                    srcAddr =
+                            inetAddr = new InetSocketAddress(InetAddresses.forString(sourceAddress), hapm.sourcePort());
+                    Attrs attrs = channel.attr(Server.CONN_DIMENSIONS).get();
+                    if (inetAddr.getAddress() instanceof Inet4Address) {
+                        HAPM_SRC_IP_VERSION.put(attrs, "v4");
+                    } else if (inetAddr.getAddress() instanceof Inet6Address) {
+                        HAPM_SRC_IP_VERSION.put(attrs, "v6");
+                    } else {
+                        HAPM_SRC_IP_VERSION.put(attrs, "unknown");
+                    }
+                    break;
+                case UNIX_STREAM: // TODO: implement
+                case UDP4:
+                case UDP6:
+                case UNIX_DGRAM:
+                    throw new IllegalArgumentException("unknown proxy protocol" + sourceAddress);
+                default:
+                    throw new AssertionError(hapm.proxiedProtocol());
             }
             channel.attr(SourceAddressChannelHandler.ATTR_REMOTE_ADDR).set(srcAddr);
         }
@@ -120,37 +117,36 @@ public final class HAProxyMessageChannelHandler extends ChannelInboundHandlerAda
         String destinationAddress = hapm.destinationAddress();
         if (destinationAddress != null) {
             channel.attr(SourceAddressChannelHandler.ATTR_LOCAL_ADDRESS).set(destinationAddress);
+
             SocketAddress dstAddr;
-            out:
-            {
-                switch (hapm.proxiedProtocol()) {
-                    case UNKNOWN:
-                        throw new IllegalArgumentException("unknown proxy protocol" + destinationAddress);
-                    case TCP4:
-                    case TCP6:
-                        InetSocketAddress inetAddr = new InetSocketAddress(
-                                InetAddresses.forString(destinationAddress), hapm.destinationPort());
-                        dstAddr = inetAddr;
-                        // set ppv2 attr explicitly because ATTR_LOCAL_ADDR could be non ppv2
-                        channel.attr(SourceAddressChannelHandler.ATTR_PROXY_PROTOCOL_DESTINATION_ADDRESS)
-                                .set(inetAddr);
-                        Attrs attrs = channel.attr(Server.CONN_DIMENSIONS).get();
-                        if (inetAddr.getAddress() instanceof Inet4Address) {
-                            HAPM_DEST_IP_VERSION.put(attrs, "v4");
-                        } else if (inetAddr.getAddress() instanceof Inet6Address) {
-                            HAPM_DEST_IP_VERSION.put(attrs, "v6");
-                        } else {
-                            HAPM_DEST_IP_VERSION.put(attrs, "unknown");
-                        }
-                        HAPM_DEST_PORT.put(attrs, hapm.destinationPort());
-                        break out;
-                    case UNIX_STREAM: // TODO: implement
-                    case UDP4:
-                    case UDP6:
-                    case UNIX_DGRAM:
-                        throw new IllegalArgumentException("unknown proxy protocol" + destinationAddress);
-                }
-                throw new AssertionError(hapm.proxiedProtocol());
+            switch (hapm.proxiedProtocol()) {
+                case UNKNOWN:
+                    throw new IllegalArgumentException("unknown proxy protocol" + destinationAddress);
+                case TCP4:
+                case TCP6:
+                    InetSocketAddress inetAddr =
+                            new InetSocketAddress(InetAddresses.forString(destinationAddress), hapm.destinationPort());
+                    dstAddr = inetAddr;
+                    // set ppv2 attr explicitly because ATTR_LOCAL_ADDR could be non ppv2
+                    channel.attr(SourceAddressChannelHandler.ATTR_PROXY_PROTOCOL_DESTINATION_ADDRESS)
+                            .set(inetAddr);
+                    Attrs attrs = channel.attr(Server.CONN_DIMENSIONS).get();
+                    if (inetAddr.getAddress() instanceof Inet4Address) {
+                        HAPM_DEST_IP_VERSION.put(attrs, "v4");
+                    } else if (inetAddr.getAddress() instanceof Inet6Address) {
+                        HAPM_DEST_IP_VERSION.put(attrs, "v6");
+                    } else {
+                        HAPM_DEST_IP_VERSION.put(attrs, "unknown");
+                    }
+                    HAPM_DEST_PORT.put(attrs, hapm.destinationPort());
+                    break;
+                case UNIX_STREAM: // TODO: implement
+                case UDP4:
+                case UDP6:
+                case UNIX_DGRAM:
+                    throw new IllegalArgumentException("unknown proxy protocol" + destinationAddress);
+                default:
+                    throw new AssertionError(hapm.proxiedProtocol());
             }
             channel.attr(SourceAddressChannelHandler.ATTR_LOCAL_ADDR).set(dstAddr);
         }

@@ -37,6 +37,8 @@ import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -67,7 +69,7 @@ public class HttpRequestMessageImpl implements HttpRequestMessage {
 
     static {
         RE_STRIP = new ArrayList<>();
-        for (String ptn : REGEX_PTNS_TO_STRIP_PROP.get().split(":::")) {
+        for (String ptn : REGEX_PTNS_TO_STRIP_PROP.get().split(":::", -1)) {
             RE_STRIP.add(Pattern.compile(ptn));
         }
     }
@@ -77,7 +79,7 @@ public class HttpRequestMessageImpl implements HttpRequestMessage {
     private static final String URI_SCHEME_HTTPS = "https";
 
     private final boolean immutable;
-    private ZuulMessage message;
+    private final ZuulMessage message;
     private String protocol;
     private String method;
     private String path;
@@ -87,7 +89,7 @@ public class HttpRequestMessageImpl implements HttpRequestMessage {
     private String scheme;
     private int port;
     private String serverName;
-    private SocketAddress clientRemoteAddress;
+    private final SocketAddress clientRemoteAddress;
 
     private HttpRequestInfo inboundRequest = null;
     private Cookies parsedCookies = null;
@@ -282,7 +284,7 @@ public class HttpRequestMessageImpl implements HttpRequestMessage {
 
     @Override
     public String getPath() {
-        if (message.getContext().get(CommonContextKeys.ZUUL_USE_DECODED_URI) == Boolean.TRUE) {
+        if (Objects.equals(message.getContext().get(CommonContextKeys.ZUUL_USE_DECODED_URI), Boolean.TRUE)) {
             return decodedPath;
         }
         return path;
@@ -552,15 +554,11 @@ public class HttpRequestMessageImpl implements HttpRequestMessage {
 
     @Override
     public int getOriginalPort() {
-        try {
-            return getOriginalPort(getContext(), getHeaders(), getPort());
-        } catch (URISyntaxException e) {
-            throw new IllegalArgumentException(e);
-        }
+        return getOriginalPort(getContext(), getHeaders(), getPort());
     }
 
     @VisibleForTesting
-    static int getOriginalPort(SessionContext context, Headers headers, int serverPort) throws URISyntaxException {
+    static int getOriginalPort(SessionContext context, Headers headers, int serverPort) {
         if (context.containsKey(CommonContextKeys.PROXY_PROTOCOL_DESTINATION_ADDRESS)) {
             return ((InetSocketAddress) context.get(CommonContextKeys.PROXY_PROTOCOL_DESTINATION_ADDRESS)).getPort();
         }
@@ -584,8 +582,7 @@ public class HttpRequestMessageImpl implements HttpRequestMessage {
 
     @Override
     public Optional<Integer> getClientDestinationPort() {
-        if (clientRemoteAddress instanceof InetSocketAddress) {
-            InetSocketAddress inetSocketAddress = (InetSocketAddress) this.clientRemoteAddress;
+        if (clientRemoteAddress instanceof InetSocketAddress inetSocketAddress) {
             return Optional.of(inetSocketAddress.getPort());
         } else {
             return Optional.empty();
@@ -622,7 +619,7 @@ public class HttpRequestMessageImpl implements HttpRequestMessage {
 
         // fallback to using a colon split
         // valid IPv6 addresses would have been handled already so any colon is safely assumed a port separator
-        String[] components = host.split(":");
+        String[] components = host.split(":", -1);
         if (components.length > 2) {
             // handle case with unbracketed IPv6 addresses
             return new Pair<>(null, -1);
@@ -663,12 +660,12 @@ public class HttpRequestMessageImpl implements HttpRequestMessage {
         try {
             StringBuilder uri = new StringBuilder(100);
 
-            String scheme = getOriginalScheme().toLowerCase();
+            String scheme = getOriginalScheme().toLowerCase(Locale.ROOT);
             uri.append(scheme);
             uri.append(URI_SCHEME_SEP).append(getOriginalHost());
 
             int port = getOriginalPort();
-            if ((URI_SCHEME_HTTP.equals(scheme) && 80 == port) || (URI_SCHEME_HTTPS.equals(scheme) && 443 == port)) {
+            if ((scheme.equals(URI_SCHEME_HTTP) && port == 80) || (scheme.equals(URI_SCHEME_HTTPS) && port == 443)) {
                 // Don't need to include port.
             } else {
                 uri.append(':').append(port);

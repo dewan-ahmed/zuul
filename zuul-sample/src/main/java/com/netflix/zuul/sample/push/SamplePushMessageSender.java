@@ -22,7 +22,7 @@ import com.netflix.zuul.netty.server.push.PushUserAuth;
 import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import javax.inject.Singleton;
+import jakarta.inject.Singleton;
 
 /**
  * Author: Susheel Aroskar
@@ -38,7 +38,7 @@ public class SamplePushMessageSender extends PushMessageSender {
 
     @Override
     protected PushUserAuth getPushUserAuth(FullHttpRequest request) {
-        final String cid = request.headers().get("X-CUSTOMER_ID");
+        String cid = request.headers().get("X-CUSTOMER_ID");
         if (Strings.isNullOrEmpty(cid)) {
             return new SamplePushUserAuth(HttpResponseStatus.UNAUTHORIZED.code());
         }

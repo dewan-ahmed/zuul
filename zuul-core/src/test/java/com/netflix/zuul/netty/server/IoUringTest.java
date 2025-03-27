@@ -61,14 +61,15 @@ import org.slf4j.LoggerFactory;
      4) verify that the server stops
 
 */
+@SuppressWarnings("AddressSelection")
 @Disabled
 class IoUringTest {
     private static final Logger LOGGER = LoggerFactory.getLogger(IoUringTest.class);
-    private static final boolean IS_OS_LINUX = "linux".equals(PlatformDependent.normalizedOs());
+    private static final boolean IS_OS_LINUX = PlatformDependent.normalizedOs().equals("linux");
 
     @BeforeEach
     void beforeTest() {
-        final AbstractConfiguration config = ConfigurationManager.getConfigInstance();
+        AbstractConfiguration config = ConfigurationManager.getConfigInstance();
         config.setProperty("zuul.server.netty.socket.force_io_uring", "true");
         config.setProperty("zuul.server.netty.socket.force_nio", "false");
     }
@@ -90,7 +91,7 @@ class IoUringTest {
 
         Map<NamedSocketAddress, ChannelInitializer<?>> initializers = new HashMap<>();
 
-        final List<IOUringSocketChannel> ioUringChannels =
+        List<IOUringSocketChannel> ioUringChannels =
                 Collections.synchronizedList(new ArrayList<IOUringSocketChannel>());
 
         ChannelInitializer<Channel> init = new ChannelInitializer<Channel>() {
@@ -146,7 +147,8 @@ class IoUringTest {
         }
     }
 
-    private static void checkConnection(final int port) {
+    @SuppressWarnings("EmptyCatch")
+    private static void checkConnection(int port) {
         LOGGER.info("checkConnection port {}", port);
         Socket sock = null;
         try {

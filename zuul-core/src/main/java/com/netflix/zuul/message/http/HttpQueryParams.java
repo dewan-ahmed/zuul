@@ -113,11 +113,15 @@ public class HttpQueryParams implements Cloneable {
     }
 
     public List<String> get(String name) {
-        return delegate.get(name.toLowerCase());
+        return delegate.get(name.toLowerCase(Locale.ROOT));
     }
 
     public boolean contains(String name) {
         return delegate.containsKey(name);
+    }
+
+    public boolean contains(String name, String value) {
+        return delegate.containsEntry(name, value);
     }
 
     /**
@@ -126,10 +130,6 @@ public class HttpQueryParams implements Cloneable {
      */
     public boolean containsIgnoreCase(String name) {
         return delegate.containsKey(name) || delegate.containsKey(name.toLowerCase(Locale.ROOT));
-    }
-
-    public boolean contains(String name, String value) {
-        return delegate.containsEntry(name, value);
     }
 
     /**
@@ -174,7 +174,7 @@ public class HttpQueryParams implements Cloneable {
         }
 
         // Remove trailing '&'.
-        if (!sb.isEmpty() && '&' == sb.charAt(sb.length() - 1)) {
+        if (!sb.isEmpty() && sb.charAt(sb.length() - 1) == '&') {
             sb.deleteCharAt(sb.length() - 1);
         }
         return sb.toString();
@@ -193,7 +193,7 @@ public class HttpQueryParams implements Cloneable {
         }
 
         // Remove trailing '&'.
-        if (!sb.isEmpty() && '&' == sb.charAt(sb.length() - 1)) {
+        if (!sb.isEmpty() && sb.charAt(sb.length() - 1) == '&') {
             sb.deleteCharAt(sb.length() - 1);
         }
         return sb.toString();

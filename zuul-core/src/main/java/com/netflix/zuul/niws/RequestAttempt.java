@@ -29,6 +29,7 @@ import com.netflix.zuul.exception.OutboundException;
 import com.netflix.zuul.netty.connectionpool.OriginConnectException;
 import io.netty.handler.timeout.ReadTimeoutException;
 import java.net.InetAddress;
+import java.util.Locale;
 import javax.net.ssl.SSLHandshakeException;
 
 /**
@@ -77,7 +78,7 @@ public class RequestAttempt {
         this.vip = targetVip;
 
         if (server != null) {
-            this.app = server.getAppName().toLowerCase();
+            this.app = server.getAppName().toLowerCase(Locale.ROOT);
             this.asg = server.getASGName();
             this.instanceId = server.getInstanceId();
             this.host = server.getHostName();
@@ -113,22 +114,22 @@ public class RequestAttempt {
     }
 
     public RequestAttempt(
-            final DiscoveryResult server,
+            DiscoveryResult server,
             InetAddress serverAddr,
-            final IClientConfig clientConfig,
+            IClientConfig clientConfig,
             int attemptNumber,
             int readTimeout) {
         this.status = -1;
         this.attempt = attemptNumber;
         this.readTimeout = readTimeout;
 
-        if (server != null && server != DiscoveryResult.EMPTY) {
+        if (server != null && !server.equals(DiscoveryResult.EMPTY)) {
             this.host = server.getHost();
             this.port = server.getPort();
             this.availabilityZone = server.getZone();
 
             if (server.isDiscoveryEnabled()) {
-                this.app = server.getAppName().toLowerCase();
+                this.app = server.getAppName().toLowerCase(Locale.ROOT);
                 this.asg = server.getASGName();
                 this.instanceId = server.getServerId();
                 this.host = server.getHost();
